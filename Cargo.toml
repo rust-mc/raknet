@@ -1,0 +1,15 @@
+[package]
+name = "raknet"
+version = "0.1.0"
+description = "RakNet implementation written in Rust language!"
+readme = "README.md"
+repository = "https://github.com/rust-mc/raknet.git"
+license = "Apache-2.0"
+authors = ["N3WC0DER <sawkin.nik@gmail.com>"]
+edition = "2021"
+
+[dependencies]
+async-std = "1.12.0"
+
+[workspace]
+members = ["test"]

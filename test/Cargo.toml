@@ -1,0 +1,8 @@
+[package]
+name = "raknet-test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+raknet = { path = "../" }
+async-std = "1.12.0"
