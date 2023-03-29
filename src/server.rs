@@ -2,6 +2,7 @@ use std::error::Error;
 use std::io::{Cursor, Read};
 use async_std::net;
 use byte_order::{ByteOrder, NumberReader};
+use log::*;
 use crate::session_manager::SessionManager;
 
 pub struct RakServer{
@@ -24,27 +25,24 @@ impl RakServer {
 	}
 
 	pub async fn listen(&mut self) {
-		println!("Listen from {}", self.local_addr().to_string());
+		info!("Listen from {}", self.local_addr().to_string());
 
 		loop {
 			let mut buffer = [0u8; 2 * 1024];
 
 			loop {
 				let (_, addr) = match self.socket.recv_from(&mut buffer).await {
-					Ok((n, _)) if n == 0 => {
-						println!("!");
-						continue
-					},
+					Ok((n, _)) if n == 0 => continue,
 					Ok((n, addr)) => (n, addr),
 					Err(e) => {
-						eprintln!("failed to read from socket; err = {:?}", e);
+						error!("failed to read from socket; err = {:?}", e);
 						continue;
 					}
 				};
 
 				let id = buffer[0];
 				let cursor = Cursor::new(buffer);
-				let mut reader = NumberReader::with_order(ByteOrder::BE, cursor);
+				let reader = NumberReader::with_order(ByteOrder::BE, cursor);
 
 				match id {
 					0x01 | 0xc1 | 0x05..=0x08 => {
@@ -54,7 +52,7 @@ impl RakServer {
 						let session = match self.session_manager.get_from_addr(&addr) {
 							Ok(session) => session,
 							Err(_) => {
-								eprintln!("non-created session [{}] sent a packet: ID {:?}",
+								error!("non-created session [{}] sent a packet: ID {:?}",
 								          addr.to_string(),
 								          reader.bytes().collect::<Vec<_>>());
 								continue
