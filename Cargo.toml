@@ -10,6 +10,7 @@ edition = "2021"
 
 [dependencies]
 async-std = "1.12.0"
+byte-order = "0.3.0"
 
 [workspace]
 members = ["test"]
