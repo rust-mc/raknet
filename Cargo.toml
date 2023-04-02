@@ -1,7 +1,7 @@
 [package]
 name = "raknet"
 version = "0.1.0"
-description = "RakNet implementation written in Rust language!"
+description = "RakNet implementation written in Rust language"
 readme = "README.md"
 repository = "https://github.com/rust-mc/raknet.git"
 license = "Apache-2.0"
@@ -12,6 +12,7 @@ edition = "2021"
 async-std = "1.12.0"
 byte-order = "0.3.0"
 log = "0.4.17"
+rakmacro = { path = "rakmacro" }
 
 [workspace]
 members = ["test"]
