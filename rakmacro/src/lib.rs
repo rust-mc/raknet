@@ -30,7 +30,6 @@ pub fn server_packet(input: TokenStream) -> TokenStream {
                             writer.write(&ip)?;
                             writer.write_u16(port)?;
                         },
-                        "[u8 ; 3]" => todo!(), // uint24_le
                         "[u8 ; 16]" => quote!(writer.write(&crate::protocol::MAGIC)?;),
                         "bool" => quote!(writer.write_u8(u8::from(self.#f_name.clone()))?;),
                         "u8" => quote! {
@@ -44,6 +43,9 @@ pub fn server_packet(input: TokenStream) -> TokenStream {
                         },
                         "i16" => quote! {
                             writer.write_i16(self.#f_name)?;
+                        },
+                        "raknet :: internal :: u24" => quote! {
+                            writer.write(self.#f_name.to_le_bytes())?;
                         },
                         "u32" => quote! {
                             writer.write_u32(self.#f_name)?;
@@ -165,7 +167,6 @@ pub fn client_packet(input: TokenStream) -> TokenStream {
 								format!("{}.{}.{}.{}:{}", ip[0], ip[1], ip[2], ip[3], port).parse().unwrap()
 	                        },
 	                    },
-						"[u8 ; 3]" => todo!(), // uint24_le
 						"[u8 ; 16]" => quote! {
 							#f_name: {
 								use std::io::Read;
@@ -194,6 +195,13 @@ pub fn client_packet(input: TokenStream) -> TokenStream {
 						},
 						"i16" => quote! {
 							#f_name: reader.read_i16()?,
+						},
+						"raknet :: internal :: u24" => quote! {
+							#f_name: {
+								let buf = [0u8; 3];
+								reader.read_exact(&mut buf)?;
+								u24::from_le_bytes(buf)
+							}
 						},
 						"u32" => quote! {
 							#f_name: reader.read_u32()?,
