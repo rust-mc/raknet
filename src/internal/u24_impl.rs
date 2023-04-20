@@ -1,6 +1,6 @@
 use core::ops::Not;
 use std::fmt;
-use std::fmt::{write, Binary, Display, Formatter};
+use std::fmt::{Binary, Display, Formatter};
 
 macro_rules! arithmetic_impl {
     ($tr:tt | $tr_assign:tt, $f:tt | $f_assign:tt, $ex:tt) => {

@@ -1,8 +1,9 @@
 #![crate_type = "proc-macro"]
 
 use proc_macro::TokenStream;
+
 use quote::{quote, ToTokens};
-use syn::{parse_macro_input, Data, DeriveInput, Fields, FieldsNamed};
+use syn::{Data, DeriveInput, Fields, FieldsNamed, parse_macro_input};
 
 #[proc_macro_derive(ServerPacket)]
 pub fn server_packet(input: TokenStream) -> TokenStream {
@@ -44,8 +45,8 @@ pub fn server_packet(input: TokenStream) -> TokenStream {
                         "i16" => quote! {
                             writer.write_i16(self.#f_name)?;
                         },
-                        "raknet :: internal :: u24" => quote! {
-                            writer.write(self.#f_name.to_le_bytes())?;
+                        "u24" => quote! {
+                            writer.write(&self.#f_name.to_le_bytes())?;
                         },
                         "u32" => quote! {
                             writer.write_u32(self.#f_name)?;
@@ -139,11 +140,11 @@ pub fn client_packet(input: TokenStream) -> TokenStream {
         Data::Struct(s) => match s.fields {
             Fields::Named(FieldsNamed { named, .. }) => {
                 let expr = named.iter().map(|f| {
-					let f_name = &f.ident;
-					let ty = f.ty.to_token_stream().to_string();
-					let ty = ty.as_str();
-					match ty {
-						"String" => quote! {
+                    let f_name = &f.ident;
+                    let ty = f.ty.to_token_stream().to_string();
+                    let ty = ty.as_str();
+                    match ty {
+                        "String" => quote! {
 							#f_name: {
 								use std::io::Read;
 								let len = reader.read_u16()?;
@@ -157,7 +158,7 @@ pub fn client_packet(input: TokenStream) -> TokenStream {
 								temp
 							},
 						},
-						"async_std :: net :: SocketAddr" => quote! {
+                        "async_std :: net :: SocketAddr" => quote! {
 	                        #f_name: {
 								use async_std::net::SocketAddr;
 		                        let version = reader.read_u8()?;
@@ -167,7 +168,7 @@ pub fn client_packet(input: TokenStream) -> TokenStream {
 								format!("{}.{}.{}.{}:{}", ip[0], ip[1], ip[2], ip[3], port).parse().unwrap()
 	                        },
 	                    },
-						"[u8 ; 16]" => quote! {
+                        "[u8 ; 16]" => quote! {
 							#f_name: {
 								use std::io::Read;
 								let mut buf = [0u8; 16];
@@ -175,49 +176,50 @@ pub fn client_packet(input: TokenStream) -> TokenStream {
 								buf
 							},
 						},
-						"MTU" => quote! {
+                        "MTU" => quote! {
 							#f_name: {
 								let size = reader.into_inner().into_inner().len();
 								MTU {0: size as u16}
 							},
 						},
-						"bool" => quote! {
+                        "bool" => quote! {
 							#f_name: if reader.read_u8()? == 1 {true} else {false},
 						},
-						"u8" => quote! {
+                        "u8" => quote! {
 							#f_name: reader.read_u8()?,
 						},
-						"i8" => quote! {
+                        "i8" => quote! {
 							#f_name: reader.read_i8()?,
 						},
-						"u16" => quote! {
+                        "u16" => quote! {
 							#f_name: reader.read_u16()?,
 						},
-						"i16" => quote! {
+                        "i16" => quote! {
 							#f_name: reader.read_i16()?,
 						},
-						"raknet :: internal :: u24" => quote! {
+                        "u24" => quote! {
 							#f_name: {
-								let buf = [0u8; 3];
+                                use std::io::Read;
+								let mut buf = [0u8; 3];
 								reader.read_exact(&mut buf)?;
 								u24::from_le_bytes(buf)
 							}
 						},
-						"u32" => quote! {
+                        "u32" => quote! {
 							#f_name: reader.read_u32()?,
 						},
-						"i32" => quote! {
+                        "i32" => quote! {
 							#f_name: reader.read_i32()?,
 						},
-						"u64" => quote! {
+                        "u64" => quote! {
 							#f_name: reader.read_u64()?,
 						},
-						"i64" => quote! {
+                        "i64" => quote! {
 							#f_name: reader.read_i64()?,
 						},
-						ty => panic!("Incompatible types: {}", ty)
-					}
-				});
+                        ty => panic!("Incompatible types: {}", ty)
+                    }
+                });
 
                 let doc_id = format!(
                     "Returned [`crate::protocol::PacketID::{}`] as `u8`",

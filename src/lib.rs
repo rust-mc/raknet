@@ -1,3 +1,5 @@
+pub use crate::server::*;
+
 /// The raknet server
 /// This is the main entry point for the server.
 pub mod server;
@@ -10,5 +12,3 @@ pub(crate) mod protocol;
 
 /// Raknet sessions
 pub(crate) mod session;
-
-pub use crate::server::*;

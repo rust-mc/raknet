@@ -1,6 +1,6 @@
-use byte_order::NumberReader;
 use std::io;
-use std::io::Cursor;
+
+use crate::internal::PacketReader;
 
 /// Unconnected packets (handshake)
 pub mod unconnected;
@@ -59,22 +59,25 @@ impl From<u8> for PacketID {
 
 pub trait ClientPacket: Sized {
     fn id() -> u8;
-    fn parse(reader: NumberReader<Cursor<Vec<u8>>>) -> io::Result<Self>;
+    fn parse(reader: PacketReader) -> io::Result<Self>;
 }
 
 pub trait ServerPacket: Sized {
     fn id() -> u8;
-    fn compose(&self) -> io::Result<NumberReader<Cursor<Vec<u8>>>>;
+    fn compose(&self) -> io::Result<PacketReader>;
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::internal::u24;
-    use crate::protocol::{ClientPacket, ServerPacket};
-    use byte_order::{ByteOrder, NumberReader};
-    use rakmacro::{ClientPacket, ServerPacket};
     use std::io::Cursor;
     use std::str::FromStr;
+
+    use byte_order::{ByteOrder, NumberReader};
+
+    use rakmacro::{ClientPacket, ServerPacket};
+
+    use crate::internal::u24;
+    use crate::protocol::{ClientPacket, ServerPacket};
 
     // The name is not related to the actual package.
     // This is necessary for the `id()` method to work correctly

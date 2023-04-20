@@ -1,82 +1,88 @@
-use std::error::Error;
-use std::io::{Cursor, Read};
-use async_std::net;
-use byte_order::{ByteOrder, NumberReader};
-use log::*;
-use crate::protocol::PacketID;
-use crate::session::SessionManager;
+use async_std::channel::unbounded;
+use async_std::io::Result;
+use async_std::net::SocketAddr;
+use async_std::task::spawn;
 
-pub struct RakServer{
-	addr: net::SocketAddr,
-	socket: net::UdpSocket,
-	session_manager: SessionManager,
+use crate::internal::{generate_guid, PacketReader};
+use crate::server::socket::RakSocket;
+pub use crate::server::stream::*;
+use crate::session::{Session, SessionManager};
+
+mod socket;
+pub mod stream;
+
+/// Basic information about Minecraft Bedrock Server.
+#[derive(Debug, Clone)]
+pub struct Motd;
+
+impl Motd {
+    pub fn new() -> Self {
+        Self
+    }
 }
 
-impl RakServer {
-	pub async fn bind(addr: net::SocketAddr) -> Result<Self, Box<dyn Error>> {
-		Ok(RakServer {
-			addr,
-			socket: net::UdpSocket::bind(addr).await?,
-			session_manager: SessionManager::new(),
-		})
-	}
+/// This enum is necessary for [`Server`], [`RakSocket`] and [`Stream`] communication
+pub enum Message {
+    /// Sends a packet to the [`Server`] for the connected session
+    Packet(SocketAddr, PacketReader),
+    /// Sends the [`Server`] a session that has passed the first stage of the raknet handshake
+    OpenSession(Session),
+}
 
-	pub fn local_addr(&self) -> net::SocketAddr {
-		self.addr
-	}
+pub struct Server {
+    guid: u64,
+    motd: Motd,
+    addr: SocketAddr,
+    stream: Stream,
+}
 
-	pub async fn listen(&mut self) {
-		info!("Listen from {}", self.local_addr().to_string());
+impl Server {
+    pub async fn new(addr: SocketAddr, guid: Option<u64>, motd: Option<Motd>) -> Result<Self> {
+        let (packet_to_socket, packet_receiver_socket) = unbounded();
+        let (packet_to_stream, packet_receiver_stream) = unbounded();
+        let (sender_message_socket, message_receiver) = unbounded();
+        let sender_message_stream = sender_message_socket.clone();
 
-		loop {
-			let mut buffer = [0u8; 2 * 1024];
+        let socket = RakSocket::bind(addr.clone(), packet_receiver_socket, sender_message_socket).await?;
+        let session_manager = SessionManager::new(message_receiver, packet_to_stream, packet_to_socket);
 
-			loop {
-				let (_, addr) = match self.socket.recv_from(&mut buffer).await {
-					Ok((n, _)) if n == 0 => continue,
-					Ok((n, addr)) => (n, addr),
-					Err(e) => {
-						error!("failed to read from socket; err = {:?}", e);
-						continue;
-					}
-				};
+        let server = Server {
+            guid: guid.unwrap_or(generate_guid()),
+            motd: motd.unwrap_or(Motd::new()),
+            addr,
+            stream: Stream::new(packet_receiver_stream, sender_message_stream),
+        };
 
-				let id = buffer[0];
-				let cursor = Cursor::new(buffer.to_vec());
-				let reader = NumberReader::with_order(ByteOrder::BE, cursor);
+        spawn(async move {
+            loop {
+                match session_manager.update().await {
+                    Ok(_) => continue,
+                    Err(_) => break,
+                }
+            }
+        });
 
-				match id {
-					0x01 | 0x05 | 0x07 | 0x09 | 0x13 | 0x15 => {
-						self.handle_unconnected(reader).await;
-					},
-					_ => {
-						let session = match self.session_manager.get_from_addr(&addr) {
-							Ok(session) => session,
-							Err(_) => {
-								error!("non-created session [{}] sent a packet: ID {:?}",
-								          addr.to_string(),
-								          reader.bytes().collect::<Vec<_>>());
-								continue
-							}
-						};
-						session.handle_packet(reader).await;
-					}
-				}
-			}
-		}
-	}
+        spawn(async move {
+            loop {
+                match socket.listen().await {
+                    Ok(_) => continue,
+                    Err(_) => break,
+                }
+            }
+        });
 
-	async fn handle_unconnected(&self, mut buffer: NumberReader<Cursor<Vec<u8>>>) {
+        Ok(server)
+    }
 
-		let id = buffer.read_u8().unwrap();
-		match id.into() {
-			PacketID::UnconnectedPing => todo!(),
-			PacketID::OpenConnectionRequest1 => todo!(),
-			PacketID::OpenConnectionRequest2 => todo!(),
-			PacketID::ConnectionRequest => todo!(),
-			PacketID::NewIncomingConnection => todo!(),
-			PacketID::Disconnect => todo!(),
-			id => error!("Unknown packet; ID: {}; Body: {:?}", id as u8, buffer.bytes().collect::<Vec<_>>())
-		}
-	}
+    pub fn local_addr(&self) -> SocketAddr {
+        self.addr
+    }
+
+    pub fn stream(&self) -> &Stream {
+        &self.stream
+    }
+
+    pub fn incoming(&mut self) -> Incoming<'_> {
+        self.stream.incoming()
+    }
 }
