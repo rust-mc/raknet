@@ -4,6 +4,7 @@ use async_std::channel::*;
 use async_std::io::Result;
 use async_std::net::ToSocketAddrs;
 use async_std::net::UdpSocket;
+use async_std::net::SocketAddr;
 use byte_order::{ByteOrder, NumberReader};
 use log::*;
 
@@ -11,15 +12,17 @@ use crate::internal::PacketInfo;
 use crate::Message;
 use crate::session::Session;
 
+/// A socket that communicates over the `RakNet` protocol.
 pub(crate) struct RakSocket {
     socket: UdpSocket,
-    // Packets to write to the socket
+    // packets to write to the socket
     packet_receiver: Receiver<PacketInfo>,
-    // Messages that will be sent to the server
+    // messages that will be sent to the SessionManager
     message_sender: Sender<Message>,
 }
 
 impl RakSocket {
+    /// Creates a socket with the specified address.
     pub async fn bind<T: ToSocketAddrs>(
         addr: T,
         packet_receiver: Receiver<PacketInfo>,
@@ -32,10 +35,15 @@ impl RakSocket {
         })
     }
 
+    /// Listens to UDP socket and transmits SessionManager packets.
+    ///
+    /// This function is in a thread loop created by the Server.
+    ///
+    /// Returns an error when the program is terminated.
     pub async fn listen(&self) -> Result<()> {
         debug!(
             "Listen from {}",
-            self.socket.local_addr().unwrap().to_string()
+            self.local_addr()?
         );
         let mut buffer = vec![0u8; 4096];
         let (bytes, _addr) = match self.socket.recv_from(&mut buffer).await {
@@ -62,5 +70,10 @@ impl RakSocket {
         }
 
         Ok(())
+    }
+
+    /// Returns the actual socket address.
+    pub fn local_addr(&self) -> Result<SocketAddr> {
+        self.socket.local_addr()
     }
 }

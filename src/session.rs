@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use async_std::channel::*;
-use async_std::io::Result;
 use async_std::net::SocketAddr;
 use async_std::sync::Arc;
 use async_std::sync::RwLock;
@@ -11,10 +10,14 @@ use crate::internal::{PacketInfo, PacketReader};
 use crate::Message;
 use crate::protocol::PacketID;
 
-pub(crate) struct SessionManager {
+/// Manages and updates sessions.
+pub struct SessionManager {
     sessions: Arc<RwLock<HashMap<SocketAddr, Session>>>,
+    // messages that will be received from the Socket and Stream
     message_receiver: Receiver<Message>,
+    // packets that will be sent to the Stream
     packet_to_stream: Sender<PacketInfo>,
+    // packets that will be sent to the Socket
     packet_to_socket: Sender<PacketInfo>,
 }
 
@@ -32,14 +35,21 @@ impl SessionManager {
         }
     }
 
-    pub async fn update(&self) -> Result<()> {
-        self.update_sessions().await;
+    /// Receives messages from [`Socket`] and [`Stream`],
+    /// processes them and sends (if necessary) packets to [`Socket`] or [`Stream`].
+    pub async fn update(&self) -> Result<(), ()> {
+        self.update_sessions().await?;
         Ok(())
     }
 
-    async fn update_sessions(&self) {}
+    /// Updates the status of sessions.
+    async fn update_sessions(&self) -> Result<(), ()> {
+
+        Ok(())
+    }
 }
 
+/// Enumeration showing the session status
 #[derive(Debug, Clone)]
 pub enum State {
     Unconnected,
@@ -48,6 +58,7 @@ pub enum State {
     Disconnected,
 }
 
+/// Network session
 #[derive(Debug, Clone)]
 pub struct Session {
     guid: u64,
@@ -57,6 +68,7 @@ pub struct Session {
 }
 
 impl Session {
+    /// Creates session with following parameters
     pub fn new(guid: u64, addr: SocketAddr, mtu: u16) -> Self {
         Session {
             guid,
@@ -66,6 +78,7 @@ impl Session {
         }
     }
 
+    /// Processes an incoming unconnected packet.
     pub async fn handle_unconnected(mut buffer: PacketReader) {
         let id = buffer.read_u8().unwrap();
         match id.into() {
