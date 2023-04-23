@@ -19,9 +19,10 @@ async fn main() {
         )
     }).filter_level(LevelFilter::Debug).init();
 
-    task::spawn(async move {
-        let mut server = Server::new("0.0.0.0:19132", None, None).await.unwrap();
-        let mut incoming = server.incoming();
+    let t = task::spawn(async move {
+        let mut listener = RakListener::bind("0.0.0.0:19132").await.unwrap();
+        listener.start();
+        let mut incoming = listener.incoming();
         while let Some((addr, packet)) = incoming.next().await {
             debug!("{}: {:?}", addr.to_string(), packet);
         }

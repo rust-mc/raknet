@@ -1,24 +1,23 @@
 use std::io::Cursor;
 use std::pin::Pin;
-use std::task::{Context, Poll, ready};
 
 use async_std::{io, stream};
 use async_std::channel::*;
 use async_std::io::ErrorKind;
 use async_std::io::Result;
 use async_std::net::{SocketAddr, ToSocketAddrs};
+use async_std::task::{Context, Poll, ready};
 use byte_order::NumberReader;
 
-use crate::internal::PacketInfo;
-use crate::Message;
+use crate::internal::{Message, PacketInfo};
 
 /// A stream of incoming packets that are not related to `RakNet`.
 /// This stream is infinite, i.e. waiting for the next packet will never result in [`None`].
-/// It is created by the [`incoming`] method on [`Server`].
+/// It is created by the [`incoming`] method on [`RakListener`].
 ///
 /// [`None`]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
-/// [`incoming`]: crate::Server::incoming
-/// [`Server`]: crate::Server
+/// [`incoming`]: crate::RakListener::incoming
+/// [`RakListener`]: crate::RakListener
 pub struct Incoming<'a> {
     stream: &'a mut Stream,
 }
@@ -32,10 +31,12 @@ impl stream::Stream for Incoming<'_> {
     }
 }
 
-/// Communication between the [`Server`] and the caller.
+/// Communication between the [`RakListener`] and the caller.
 /// Returns and accepts packets that are not associated with the `RakNet` protocol (i.e. `GamePacket`).
+///
+/// [`RakListener`]: crate::RakListener;
 pub struct Stream {
-    // packets received from the SessionManager
+    // packets received from the ConnectionHandler
     packet_receiver: Receiver<PacketInfo>,
     // packets to send to the server
     message_sender: Sender<Message>,
@@ -61,9 +62,10 @@ impl Stream {
     /// ```no_run
     /// # fn main()  -> std::io::Result<()> { async_std::task::block_on(async {
     /// #
-    /// use raknet::{Server, Stream};
+    /// use raknet::{RakListener, Stream};
     ///
-    /// let server = Server::new("127.0.0.1:19132", None, None).await?;
+    /// let listener = RakListener::bind("127.0.0.1:19132").await?;
+    /// server.start();
     /// let stream = server.stream();
     ///
     /// let mut buf = vec![0u8; 1024];
@@ -86,9 +88,10 @@ impl Stream {
     /// ```no_run
     /// # fn main()  -> std::io::Result<()> { async_std::task::block_on(async {
     /// #
-    /// use raknet::{Server, Stream};
+    /// use raknet::{RakListener, Stream, Motd};
     ///
-    /// let server = Server::new("127.0.0.1:19132", None, None).await?;
+    /// let listener = RakListener::bind("127.0.0.1:19132").await?;
+    /// server.start();
     /// let stream = server.stream();
     ///
     /// let mut buf = vec![0u8; 1024];
@@ -98,8 +101,7 @@ impl Stream {
     /// # Ok(()) }) }
     /// ```
     pub async fn recv_from(&self, buffer: &mut [u8]) -> Result<(usize, SocketAddr)> {
-        let (addr, data) = self.packet_receiver.recv().await
-            .map_err( |e| { io::Error::new(ErrorKind::Other, e) })?;
+        let (addr, data) = self.packet_receiver.recv().await.map_err(|e| { io::Error::new(ErrorKind::Other, e) })?;
 
         let bytes = data.len();
         buffer.copy_from_slice(&data);
@@ -115,11 +117,11 @@ impl Stream {
     /// ```no_run
     /// # fn main()  -> std::io::Result<()> { async_std::task::block_on(async {
     /// #
-    /// use raknet::{Server, Stream};
+    /// use raknet::{RakListener, Stream, Motd};
     ///
-    /// let server = Server::new("127.0.0.1:19132", None, None).await?;
+    /// let listener = RakListener::bind("127.0.0.1:19132").await?;
+    /// server.start();
     /// let stream = server.stream();
-    ///
     ///
     /// let n = stream.send_to(b"Hi there!", "127.0.0.1:19133").await?;
     /// println!("Sent {} bytes", n);
@@ -127,22 +129,23 @@ impl Stream {
     /// # Ok(()) }) }
     /// ```
     pub async fn send_to<T: ToSocketAddrs>(&self, buffer: &[u8], addr: T) -> Result<()> {
-        let addr = match addr.to_socket_addrs().await?.next() {
-            None => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "no addresses to send data to",
-                ))
-            },
-            Some(addr) => addr
-        };
+        let addrs: Vec<SocketAddr> = addr.to_socket_addrs().await?.collect();
 
-        let cursor = Cursor::new(buffer.to_vec());
-        let reader = NumberReader::new(cursor);
-        let message = Message::Packet(addr, reader);
+        if addrs.len() == 0 {
+            return Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                "no addresses to send data to",
+            ))
+        }
 
-        self.message_sender.send(message).await
-            .map_err( |e| { io::Error::new(ErrorKind::Other, e) })?;
+        for addr in addrs {
+            let cursor = Cursor::new(buffer.to_vec());
+            let reader = NumberReader::new(cursor);
+            let message = Message::Packet(addr, reader);
+
+            self.message_sender.send(message).await.map_err(|e| { io::Error::new(ErrorKind::Other, e) })?;
+        }
+
         Ok(())
     }
 

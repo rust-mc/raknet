@@ -10,5 +10,5 @@ pub(crate) mod internal;
 /// This contains some generic handling for the protocol.
 pub(crate) mod protocol;
 
-/// Raknet sessions
-pub(crate) mod session;
+/// Raknet connections
+pub(crate) mod connection;

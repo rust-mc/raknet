@@ -14,6 +14,7 @@ byte-order = "0.3.0"
 log = "0.4.17"
 rakmacro = { path = "rakmacro" }
 rand = "0.8.5"
+lazy_static = "1.4.0"
 
 [workspace]
 members = ["test"]

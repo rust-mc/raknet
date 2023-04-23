@@ -15,6 +15,7 @@ pub(crate) const MAGIC: [u8; 16] = [
 pub enum PacketID {
     ConnectedPing = 0x00,
     UnconnectedPing = 0x01,
+    UnconnectedPing2 = 0x02,
     ConnectedPong = 0x03,
     OpenConnectionRequest1 = 0x05,
     OpenConnectionReply1 = 0x06,
