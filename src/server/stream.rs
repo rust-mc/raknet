@@ -65,8 +65,8 @@ impl Stream {
     /// use raknet::{RakListener, Stream};
     ///
     /// let listener = RakListener::bind("127.0.0.1:19132").await?;
-    /// server.start();
-    /// let stream = server.stream();
+    /// listener.start();
+    /// let stream = listener.stream();
     ///
     /// let mut buf = vec![0u8; 1024];
     /// let n = stream.recv(&mut buf).await?;
@@ -91,8 +91,8 @@ impl Stream {
     /// use raknet::{RakListener, Stream, Motd};
     ///
     /// let listener = RakListener::bind("127.0.0.1:19132").await?;
-    /// server.start();
-    /// let stream = server.stream();
+    /// listener.start();
+    /// let stream = listener.stream();
     ///
     /// let mut buf = vec![0u8; 1024];
     /// let (n, addr) = stream.recv_from(&mut buf).await?;
@@ -120,18 +120,19 @@ impl Stream {
     /// use raknet::{RakListener, Stream, Motd};
     ///
     /// let listener = RakListener::bind("127.0.0.1:19132").await?;
-    /// server.start();
-    /// let stream = server.stream();
+    /// listener.start();
+    /// let stream = listener.stream();
     ///
     /// let n = stream.send_to(b"Hi there!", "127.0.0.1:19133").await?;
     /// println!("Sent {} bytes", n);
     ///
     /// # Ok(()) }) }
     /// ```
-    pub async fn send_to<T: ToSocketAddrs>(&self, buffer: &[u8], addr: T) -> Result<()> {
+    pub async fn send_to<T: ToSocketAddrs>(&self, buffer: &[u8], addr: T) -> Result<usize> {
         let addrs: Vec<SocketAddr> = addr.to_socket_addrs().await?.collect();
+        let count_addrs = addrs.len();
 
-        if addrs.len() == 0 {
+        if addrs.is_empty() {
             return Err(io::Error::new(
                 ErrorKind::InvalidInput,
                 "no addresses to send data to",
@@ -146,7 +147,7 @@ impl Stream {
             self.message_sender.send(message).await.map_err(|e| { io::Error::new(ErrorKind::Other, e) })?;
         }
 
-        Ok(())
+        Ok(buffer.len() * count_addrs)
     }
 
     pub(crate) fn incoming(&mut self) -> Incoming<'_> {

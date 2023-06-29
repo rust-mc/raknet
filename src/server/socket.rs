@@ -52,7 +52,7 @@ impl RakSocket {
             };
 
             buffer.truncate(bytes);
-            let id = buffer.first().unwrap().clone();
+            let id = *buffer.first().unwrap();
             let cursor = Cursor::new(buffer);
             let reader = NumberReader::with_order(ByteOrder::BE, cursor);
 
